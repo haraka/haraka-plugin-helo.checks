@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - valid_hostname - check helo hostname for valid ascii string (#7)
 - create a valid DSN response for such an error
+- deps: bump versions to latest
 
 ### [1.0.3] - 2025-02-06
 
