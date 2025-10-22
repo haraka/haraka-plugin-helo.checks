@@ -184,13 +184,11 @@ exports.valid_hostname = function (next, connection, helo) {
     return next()
   }
 
-  // Check whether the HELO hostname is a valid ASCII string
+  // assure HELO hostname is ASCII only
   if (!/[\x20-\x7E]+/.test(helo)) {
     connection.results.add(this, { fail: 'valid_hostname(not_ascii)' })
-    if (this.cfg.reject.valid_hostname) {
-      return next(DENY, DSN.helo_not_ascii())
-    }
-    return next()
+    this.cfg.reject.valid_hostname ? next(DENY, DSN.helo_not_ascii()) : next()
+    return
   }
 
   // this will fail if TLD is invalid or hostname is a public suffix

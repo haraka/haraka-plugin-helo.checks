@@ -4,6 +4,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Unreleased
 
+### [1.1.0] - 2025-10-22
+
+- valid_hostname - check helo hostname for valid ascii string (#7)
+- create a valid DSN response for such an error
+
 ### [1.0.3] - 2025-02-06
 
 - fix: results.ips wasn't being populated
@@ -30,3 +35,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 [1.0.1]: https://github.com/haraka/haraka-plugin-helo.checks/releases/tag/v1.0.1
 [1.0.2]: https://github.com/haraka/haraka-plugin-helo.checks/releases/tag/v1.0.2
 [1.0.3]: https://github.com/haraka/haraka-plugin-helo.checks/releases/tag/v1.0.3
+[1.1.0]: https://github.com/haraka/haraka-plugin-helo.checks/releases/tag/v1.1.0
