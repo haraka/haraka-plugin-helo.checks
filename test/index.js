@@ -4,8 +4,14 @@ const { beforeEach, describe, it } = require('node:test')
 const path = require('node:path')
 
 const fixtures = require('haraka-test-fixtures')
+const tlds = require('haraka-tld')
 
-const _set_up = (t, done) => {
+const _set_up = async () => {
+  // haraka-tld loads its public suffix list asynchronously; without this
+  // get_organizational_domain() returns null and rdns_match/valid_hostname
+  // checks misfire (see https://github.com/haraka/haraka-tld)
+  await tlds.ready
+
   this.plugin = new fixtures.plugin('helo.checks')
   this.plugin.config.root_path = path.resolve('test', 'config')
 
@@ -13,22 +19,34 @@ const _set_up = (t, done) => {
   this.connection.remote.ip = '208.75.199.19'
 
   this.plugin.register()
-
-  done()
 }
 
 describe('helo.checks', () => {
   beforeEach(_set_up)
 
   it('init is always run', () => {
-    assert.equal(this.plugin.register_hook.args[2][0], 'helo')
-    assert.equal(this.plugin.register_hook.args[2][1], 'init')
-    assert.equal(this.plugin.register_hook.args[3][0], 'ehlo')
-    assert.equal(this.plugin.register_hook.args[3][1], 'init')
+    assert.ok(this.plugin.hooks.helo.includes('init'))
+    assert.ok(this.plugin.hooks.ehlo.includes('init'))
   })
 
   it('hooks are registered', () => {
-    assert.equal(this.plugin.register_hook.args.length, 24)
+    const checks = [
+      'init',
+      'match_re',
+      'bare_ip',
+      'dynamic',
+      'big_company',
+      'valid_hostname',
+      'rdns_match',
+      'forward_dns',
+      'host_mismatch',
+      'literal_mismatch',
+      'emit_log',
+    ]
+    assert.deepEqual(this.plugin.hooks, {
+      helo: ['proto_mismatch_smtp', ...checks],
+      ehlo: ['proto_mismatch_esmtp', ...checks],
+    })
   })
 
   it('default config is loaded', () => {
