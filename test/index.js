@@ -1,5 +1,5 @@
 'use strict'
-const assert = require('node:assert')
+const assert = require('node:assert/strict')
 const { beforeEach, describe, it } = require('node:test')
 const path = require('node:path')
 
