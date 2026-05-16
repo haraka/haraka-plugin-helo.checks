@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### [1.1.1] - 2026-05-15
 
 - deps(all): bump versions to latest
+- test: updates to accompany test-fixture updates
 
 ### [1.1.0] - 2025-10-22
 
