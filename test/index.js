@@ -1,9 +1,9 @@
 'use strict'
 const assert = require('node:assert/strict')
-const { beforeEach, describe, it } = require('node:test')
 const path = require('node:path')
+const { beforeEach, describe, it } = require('node:test')
 
-const fixtures = require('haraka-test-fixtures')
+const { makeConnection, makePlugin } = require('haraka-test-fixtures')
 const tlds = require('haraka-tld')
 
 const _set_up = async () => {
@@ -12,11 +12,10 @@ const _set_up = async () => {
   // checks misfire (see https://github.com/haraka/haraka-tld)
   await tlds.ready
 
-  this.plugin = new fixtures.plugin('helo.checks')
+  this.plugin = makePlugin('helo.checks', { register: false })
   this.plugin.config.root_path = path.resolve('test', 'config')
 
-  this.connection = fixtures.connection.createConnection()
-  this.connection.remote.ip = '208.75.199.19'
+  this.connection = makeConnection({ ip: '208.75.199.19' })
 
   this.plugin.register()
 }
