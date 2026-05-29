@@ -1,10 +1,17 @@
-'use strict'
-// Check various bits of the HELO string
 const dns = require('node:dns')
 
+const DSN = require('haraka-dsn')
 const tlds = require('haraka-tld')
 const net_utils = require('haraka-net-utils')
 const utils = require('haraka-utils')
+
+DSN.helo_not_ascii = () =>
+  DSN.create(
+    501,
+    'HELO/EHLO argument invalid - HELO hostname contains non-ASCII characters (RFC 5321 2.3.5), closing connection',
+    5,
+    4,
+  )
 
 const checks = [
   'match_re', // List of regexps
@@ -15,17 +22,8 @@ const checks = [
   'rdns_match', // HELO hostname matches rDNS
   'forward_dns', // HELO hostname resolves to the connecting IP
   'host_mismatch', // hostname differs between invocations
-  // literal_mismatch
+  // literal_mismatch is always registered
 ]
-
-const DSN = require('haraka-dsn')
-DSN.helo_not_ascii = () =>
-  DSN.create(
-    501,
-    'HELO/EHLO argument invalid - HELO hostname contains non-ASCII characters (RFC 5321 2.3.5), closing connection',
-    5,
-    4,
-  )
 
 exports.register = function () {
   this.load_helo_checks_ini()
@@ -111,7 +109,9 @@ exports.load_helo_checks_ini = function () {
 }
 
 exports.init = function (next, connection, helo) {
-  if (!connection.results.has('helo.checks', 'helo_host', helo)) {
+  // Preserve the FIRST helo so host_mismatch can compare later
+  const cur = connection.results.get('helo.checks')
+  if (!cur || cur.helo_host === undefined) {
     connection.results.add(this, { helo_host: helo })
   }
 
@@ -181,11 +181,13 @@ exports.valid_hostname = function (next, connection, helo) {
     return next()
   }
 
-  // assure HELO hostname is ASCII only
-  if (!/[\x20-\x7E]+/.test(helo)) {
+  // RFC 5321 2.3.5: the entire HELO hostname must be ASCII.
+  if (!/^[\x20-\x7E]+$/.test(helo)) {
     connection.results.add(this, { fail: 'valid_hostname(not_ascii)' })
-    this.cfg.reject.valid_hostname ? next(DENY, DSN.helo_not_ascii()) : next()
-    return
+    if (this.cfg.reject.valid_hostname) {
+      return next(DENY, DSN.helo_not_ascii())
+    }
+    return next()
   }
 
   // this will fail if TLD is invalid or hostname is a public suffix
@@ -421,7 +423,7 @@ exports.forward_dns = function (next, connection, helo) {
         connection.results.add(this, { err: 'forward_dns, no ips!' })
         return next()
       }
-      connection.results.add(this, { ips: ips })
+      connection.results.add(this, { ips })
 
       if (ips.includes(connection.remote.ip)) {
         connection.results.add(this, { pass: 'forward_dns' })
@@ -472,8 +474,7 @@ exports.forward_dns = function (next, connection, helo) {
 exports.proto_mismatch = function (next, connection, helo, proto) {
   if (this.should_skip(connection, 'proto_mismatch')) return next()
 
-  const r = connection.results.get('helo.checks')
-  if (!r || (r && !r.helo_host)) return next()
+  if (!connection.results.get('helo.checks')?.helo_host) return next()
 
   if (
     (connection.esmtp && proto === 'smtp') ||
@@ -499,7 +500,7 @@ exports.proto_mismatch_esmtp = function (next, connection, helo) {
   this.proto_mismatch(next, connection, helo, 'esmtp')
 }
 
-exports.emit_log = function (next, connection, helo) {
+exports.emit_log = function (next, connection) {
   // Spits out an INFO log entry. Default looks like this:
   // [helo.checks] helo_host: [182.212.17.35], fail:big_co(rDNS) rdns_match(literal), pass:valid_hostname, match_re, bare_ip, literal_mismatch, mismatch, skip:dynamic(literal), valid_hostname(literal)
   //
@@ -531,7 +532,6 @@ exports.get_a_records = async function (host) {
   // fully qualify, to ignore any search options in /etc/resolv.conf
   if (!/\.$/.test(host)) host = `${host}.`
 
-  // do the queries — initialize `ips` so `ips.length` check is safe
   let ips = []
   let err = ''
   try {
@@ -550,9 +550,6 @@ exports.get_a_records = async function (host) {
     }
   }
 
-  // results is now equals to: {queryA: 1, queryAAAA: 2}
   if (!ips.length && err) throw new Error(err)
-  // this.logdebug(this, host + ' => ' + ips);
-  // return the DNS results
   return ips
 }
