@@ -1,7 +1,6 @@
-[![CI Test Status][ci-img]][ci-url]
-[![Code Climate][clim-img]][clim-url]
-
 # haraka-plugin-helo.checks
+
+[![Test][ci-img]][ci-url] [![Cover][cov-img]][cov-url] [![Qlty][qlty-img]][qlty-url]
 
 This plugin performs a number of checks on the HELO string.
 
@@ -147,5 +146,7 @@ gmail.com=google.com
 
 [ci-img]: https://github.com/haraka/haraka-plugin-helo.checks/actions/workflows/ci.yml/badge.svg
 [ci-url]: https://github.com/haraka/haraka-plugin-helo.checks/actions/workflows/ci.yml
-[clim-img]: https://codeclimate.com/github/haraka/haraka-plugin-helo.checks/badges/gpa.svg
-[clim-url]: https://codeclimate.com/github/haraka/haraka-plugin-helo.checks
+[cov-img]: https://codecov.io/github/haraka/haraka-plugin-helo.checks/coverage.svg
+[cov-url]: https://codecov.io/github/haraka/haraka-plugin-helo.checks
+[qlty-img]: https://qlty.sh/gh/haraka/projects/haraka-plugin-helo.checks/maintainability.svg
+[qlty-url]: https://qlty.sh/gh/haraka/projects/haraka-plugin-helo.checks
