@@ -654,4 +654,195 @@ describe('helo.checks', () => {
       )
     })
   })
+
+  describe('init', () => {
+    beforeEach(_set_up)
+
+    it('does not re-add helo_host when already recorded', (t, done) => {
+      this.connection.results.add(this.plugin, { helo_host: 'a.example.com' })
+      this.plugin.init(
+        () => {
+          const r = this.connection.results.get('helo.checks')
+          assert.equal(r.helo_host, 'a.example.com')
+          done()
+        },
+        this.connection,
+        'a.example.com',
+      )
+    })
+  })
+
+  describe('load_helo_checks_ini back-compat', () => {
+    beforeEach(_set_up)
+
+    const inject = (cfg) => {
+      this.plugin.config.get = () => cfg
+      this.plugin.load_helo_checks_ini()
+    }
+
+    it('check_no_dot -> check.valid_hostname', () => {
+      inject({
+        check: {},
+        reject: {},
+        skip: {},
+        bigco: {},
+        check_no_dot: true,
+      })
+      assert.equal(this.plugin.cfg.check.valid_hostname, true)
+    })
+
+    it('check_dynamic -> check.dynamic', () => {
+      inject({
+        check: {},
+        reject: {},
+        skip: {},
+        bigco: {},
+        check_dynamic: true,
+      })
+      assert.equal(this.plugin.cfg.check.dynamic, true)
+    })
+
+    it('check_raw_ip -> check.bare_ip', () => {
+      inject({
+        check: {},
+        reject: {},
+        skip: {},
+        bigco: {},
+        check_raw_ip: true,
+      })
+      assert.equal(this.plugin.cfg.check.bare_ip, true)
+    })
+
+    it('reject.mismatch -> reject.host_mismatch', () => {
+      const logged = []
+      this.plugin.logerror = (msg) => logged.push(msg)
+      inject({
+        check: {},
+        reject: { mismatch: true },
+        skip: {},
+        bigco: {},
+      })
+      assert.equal(this.plugin.cfg.reject.host_mismatch, true)
+      assert.ok(logged.some((m) => /deprecated/.test(m)))
+    })
+
+    it('defaults literal_mismatch to 2 when missing', () => {
+      inject({ check: {}, reject: {}, skip: {}, bigco: {} })
+      assert.equal(this.plugin.cfg.check.literal_mismatch, 2)
+    })
+  })
+
+  describe('emit_log', () => {
+    beforeEach(_set_up)
+
+    it('writes collated results via loginfo and calls next', (t, done) => {
+      let logged = false
+      this.connection.loginfo = () => {
+        logged = true
+      }
+      this.connection.results.add(this.plugin, { pass: 'valid_hostname' })
+      this.plugin.emit_log(
+        () => {
+          assert.ok(logged)
+          done()
+        },
+        this.connection,
+        'host.example.com',
+      )
+    })
+  })
+
+  describe('get_a_records', () => {
+    beforeEach(_set_up)
+
+    it('throws NOTFOUND for a single-label hostname', async () => {
+      await assert.rejects(() => this.plugin.get_a_records('localhost'), {
+        message: 'invalid hostname',
+      })
+    })
+  })
+
+  describe('proto_mismatch_smtp / esmtp', () => {
+    beforeEach(_set_up)
+
+    it('proto_mismatch_smtp forwards proto=smtp', (t, done) => {
+      this.plugin.init(() => {}, this.connection, 'helo.example.com')
+      this.connection.esmtp = true // smtp arg + esmtp=true -> mismatch
+      this.plugin.cfg.check.proto_mismatch = true
+      this.plugin.cfg.reject.proto_mismatch = false
+      this.plugin.proto_mismatch_smtp(
+        (rc) => {
+          assert.equal(rc, undefined)
+          assert.ok(this.connection.results.get('helo.checks').fail.length)
+          done()
+        },
+        this.connection,
+        'host',
+      )
+    })
+
+    it('proto_mismatch_esmtp forwards proto=esmtp', (t, done) => {
+      this.plugin.init(() => {}, this.connection, 'helo.example.com')
+      this.connection.esmtp = false // esmtp arg + esmtp=false -> mismatch
+      this.plugin.cfg.check.proto_mismatch = true
+      this.plugin.cfg.reject.proto_mismatch = false
+      this.plugin.proto_mismatch_esmtp(
+        (rc) => {
+          assert.equal(rc, undefined)
+          assert.ok(this.connection.results.get('helo.checks').fail.length)
+          done()
+        },
+        this.connection,
+        'host',
+      )
+    })
+  })
+
+  describe('forward_dns short-circuit paths', () => {
+    beforeEach(_set_up)
+
+    it('errs and continues when valid_hostname is disabled', (t, done) => {
+      this.plugin.cfg.check.forward_dns = true
+      this.plugin.cfg.check.valid_hostname = false
+      this.plugin.forward_dns(
+        (rc) => {
+          assert.equal(rc, undefined)
+          assert.ok(this.connection.results.get('helo.checks').err.length)
+          done()
+        },
+        this.connection,
+        'host.example.com',
+      )
+    })
+
+    it('skips when helo is an IP literal', (t, done) => {
+      this.plugin.cfg.check.forward_dns = true
+      this.plugin.cfg.check.valid_hostname = true
+      this.plugin.forward_dns(
+        (rc) => {
+          assert.equal(rc, undefined)
+          assert.ok(this.connection.results.get('helo.checks').skip.length)
+          done()
+        },
+        this.connection,
+        '[192.0.2.1]',
+      )
+    })
+
+    it('DENYs invalid hostname when reject is on', (t, done) => {
+      this.plugin.cfg.check.forward_dns = true
+      this.plugin.cfg.check.valid_hostname = true
+      this.plugin.cfg.reject.forward_dns = true
+      // no prior `pass: valid_hostname` result, so the host is "invalid"
+      this.plugin.forward_dns(
+        (rc) => {
+          assert.equal(rc, DENY)
+          assert.ok(this.connection.results.get('helo.checks').fail.length)
+          done()
+        },
+        this.connection,
+        'host.example.com',
+      )
+    })
+  })
 })
