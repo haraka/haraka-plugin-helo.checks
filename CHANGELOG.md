@@ -4,6 +4,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Unreleased
 
+- fix: actually migrate deprecated `mismatch` setting to `host_mismatch`
+- fix: `get_a_records` initializes `ips=[]` and rethrows an Error (was bare string)
+- doc: README closing paren in `results.has(...)` example
 - test: refactored against test-fixtures 1.7.0
 
 ### [1.1.1] - 2026-05-15

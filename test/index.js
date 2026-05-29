@@ -672,6 +672,44 @@ describe('helo.checks', () => {
     })
   })
 
+  describe('deprecated check.mismatch migration', () => {
+    beforeEach(_set_up)
+
+    it('migrates check.mismatch -> check.host_mismatch', () => {
+      const logged = []
+      this.plugin.logerror = (msg) => logged.push(msg)
+      this.plugin.config.get = () => ({
+        check: { mismatch: true },
+        reject: {},
+        skip: {},
+        bigco: {},
+      })
+      this.plugin.load_helo_checks_ini()
+      assert.equal(this.plugin.cfg.check.host_mismatch, true)
+      assert.ok(logged.some((m) => /deprecated/.test(m)))
+    })
+  })
+
+  describe('get_a_records error handling', () => {
+    beforeEach(_set_up)
+
+    it('does not throw TypeError when get_ips_by_host rejects with unknown codes', async () => {
+      const net_utils = require('haraka-net-utils')
+      const original = net_utils.get_ips_by_host
+      net_utils.get_ips_by_host = async () => {
+        throw [Object.assign(new Error('quirky'), { code: 'EFOO' })]
+      }
+      try {
+        await assert.rejects(
+          () => this.plugin.get_a_records('mail.example.com'),
+          (err) => !(err instanceof TypeError),
+        )
+      } finally {
+        net_utils.get_ips_by_host = original
+      }
+    })
+  })
+
   describe('load_helo_checks_ini back-compat', () => {
     beforeEach(_set_up)
 

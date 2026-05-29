@@ -86,26 +86,23 @@ exports.load_helo_checks_ini = function () {
     this.load_helo_checks_ini()
   })
 
-  this.cfg.check.literal_mismatch = this.cfg.check.literal_mismatch ?? 2
+  const chk = this.cfg.check
+  chk.literal_mismatch = chk.literal_mismatch ?? 2
 
   // backwards compatible with old config file
   if (this.cfg.check_no_dot !== undefined) {
-    this.cfg.check.valid_hostname = !!this.cfg.check_no_dot
+    chk.valid_hostname = !!this.cfg.check_no_dot
   }
   if (this.cfg.check_dynamic !== undefined) {
-    this.cfg.check.dynamic = !!this.cfg.check_dynamic
+    chk.dynamic = !!this.cfg.check_dynamic
   }
   if (this.cfg.check_raw_ip !== undefined) {
-    this.cfg.check.bare_ip = !!this.cfg.check_raw_ip
+    chk.bare_ip = !!this.cfg.check_raw_ip
   }
 
-  // non-default setting, so apply their localized setting
-  if (
-    this.cfg.check.mismatch !== undefined &&
-    this.cfg.check.mismatch === undefined
-  ) {
+  if (chk.mismatch !== undefined && chk.host_mismatch === undefined) {
     this.logerror('deprecated setting mismatch renamed to host_mismatch')
-    this.cfg.check.host_mismatch = this.cfg.check.mismatch
+    chk.host_mismatch = this.cfg.check.mismatch
   }
   if (this.cfg.reject.mismatch !== undefined && this.cfg.reject.mismatch) {
     this.logerror('deprecated setting mismatch renamed to host_mismatch')
@@ -534,13 +531,14 @@ exports.get_a_records = async function (host) {
   // fully qualify, to ignore any search options in /etc/resolv.conf
   if (!/\.$/.test(host)) host = `${host}.`
 
-  // do the queries
-  let ips
+  // do the queries — initialize `ips` so `ips.length` check is safe
+  let ips = []
   let err = ''
   try {
     ips = await net_utils.get_ips_by_host(host)
   } catch (errs) {
-    for (const error of errs) {
+    const list = Array.isArray(errs) ? errs : [errs]
+    for (const error of list) {
       switch (error.code) {
         case dns.NODATA:
         case dns.NOTFOUND:
@@ -553,7 +551,7 @@ exports.get_a_records = async function (host) {
   }
 
   // results is now equals to: {queryA: 1, queryAAAA: 2}
-  if (!ips.length && err) throw err
+  if (!ips.length && err) throw new Error(err)
   // this.logdebug(this, host + ' => ' + ips);
   // return the DNS results
   return ips

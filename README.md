@@ -12,15 +12,15 @@ highly effective and false-positive free anti-spam measure.
 helo.checks results can be accessed by subsequent plugins:
 
 ```js
-const h = connection.results.get('helo.checks');
+const h = connection.results.get('helo.checks')
 if (h.pass && h.pass.length > 5) {
-    // nice job, you passed 6+ tests
+  // nice job, you passed 6+ tests
 }
 if (h.fail && h.fail.length > 3) {
-    // yikes, you failed 4+ tests!
+  // yikes, you failed 4+ tests!
 }
-if (connection.results.has('helo.checks','pass', /^forward_dns/) {
-    // the HELO hostname is valid
+if (connection.results.has('helo.checks', 'pass', /^forward_dns/)) {
+  // the HELO hostname is valid
 }
 ```
 
