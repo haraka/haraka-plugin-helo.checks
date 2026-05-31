@@ -100,7 +100,7 @@ exports.load_helo_checks_ini = function () {
 
   if (chk.mismatch !== undefined && chk.host_mismatch === undefined) {
     this.logerror('deprecated setting mismatch renamed to host_mismatch')
-    chk.host_mismatch = this.cfg.check.mismatch
+    chk.host_mismatch = chk.mismatch
   }
   if (this.cfg.reject.mismatch !== undefined && this.cfg.reject.mismatch) {
     this.logerror('deprecated setting mismatch renamed to host_mismatch')
