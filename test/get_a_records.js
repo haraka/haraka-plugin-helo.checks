@@ -66,8 +66,19 @@ describe('get_a_records', () => {
   })
 
   it('appends a trailing dot to bypass /etc/resolv.conf search', async () => {
-    // mail.example.com (no trailing dot) should still resolve via our fake DNS
-    const ips = await plugin.get_a_records('mail.example.com')
-    assert.ok(ips.length)
+    const net_utils = require('haraka-net-utils')
+    const original = net_utils.getHostIPs
+    const seen = []
+    net_utils.getHostIPs = async (host) => {
+      seen.push(host)
+      return { addrs: ['198.51.100.10'], errors: [] }
+    }
+    try {
+      await plugin.get_a_records('mail.example.com') // undotted -> dot added
+      await plugin.get_a_records('already.example.') // dotted -> left as-is
+    } finally {
+      net_utils.getHostIPs = original
+    }
+    assert.deepEqual(seen, ['mail.example.com.', 'already.example.'])
   })
 })
