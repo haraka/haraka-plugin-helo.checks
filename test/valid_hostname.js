@@ -28,6 +28,20 @@ describe('valid_hostname', () => {
     assertResult(connection, plugin, 'pass', 'valid_hostname')
   })
 
+  it('passes for a valid FQDN even when an earlier check failed', async () => {
+    // a prior check (e.g. match_re) may have recorded a fail; that must not
+    // suppress this check's own pass, which forward_dns keys off of
+    connection.results.add(plugin, { fail: 'match_re' })
+    const r = await callHook(
+      plugin,
+      'valid_hostname',
+      connection,
+      'great.domain.com',
+    )
+    assertCont(r)
+    assertResult(connection, plugin, 'pass', 'valid_hostname')
+  })
+
   it('fails (no reject) for invalid TLD', async () => {
     plugin.cfg.reject.valid_hostname = false
     const r = await callHook(
@@ -116,6 +130,18 @@ describe('valid_hostname', () => {
       'üöä.example',
     )
     assertDeny(r, undefined, DENY)
+    assertResult(connection, plugin, 'fail', 'valid_hostname(not_ascii)')
+  })
+
+  it('Detects non-ASCII helo (RFC 5321 §2.3.5)', async () => {
+    plugin.cfg.reject.valid_hostname = false
+    await callHook(plugin, 'valid_hostname', connection, 'exaöple')
+    assertResult(connection, plugin, 'fail', 'valid_hostname(not_ascii)')
+  })
+
+  it('Detects non-ASCII helo with dot (RFC 5321 §2.3.5)', async () => {
+    plugin.cfg.reject.valid_hostname = false
+    await callHook(plugin, 'valid_hostname', connection, 'host.exaöple')
     assertResult(connection, plugin, 'fail', 'valid_hostname(not_ascii)')
   })
 })
