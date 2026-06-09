@@ -23,13 +23,7 @@ exports.setup = async function (opts = {}) {
 // Run every method registered on hookName ('helo' or 'ehlo') in order,
 // stopping early on the first DENY*/OK code. Returns the final {rc, msg}.
 exports.runHookChain = async function (plugin, hookName, connection, helo) {
-  const denySet = new Set([
-    DENY,
-    DENYSOFT,
-    DENYDISCONNECT,
-    DENYSOFTDISCONNECT,
-    OK,
-  ])
+  const denySet = new Set([DENY, DENYSOFT, DENYDISCONNECT, DENYSOFTDISCONNECT, OK])
   let last = { rc: undefined, msg: undefined }
   for (const method of plugin.hooks[hookName] ?? []) {
     last = await callHook(plugin, method, connection, helo)

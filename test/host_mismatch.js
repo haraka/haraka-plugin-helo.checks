@@ -1,11 +1,6 @@
 const { beforeEach, describe, it } = require('node:test')
 
-const {
-  callHook,
-  assertCont,
-  assertDeny,
-  assertResult,
-} = require('haraka-test-fixtures')
+const { callHook, assertCont, assertDeny, assertResult } = require('haraka-test-fixtures')
 
 const { setup } = require('./_setup')
 
@@ -18,24 +13,14 @@ describe('host_mismatch', () => {
   })
 
   it('skips when no previous helo recorded (1st)', async () => {
-    const r = await callHook(
-      plugin,
-      'host_mismatch',
-      connection,
-      'a.example.com',
-    )
+    const r = await callHook(plugin, 'host_mismatch', connection, 'a.example.com')
     assertCont(r)
     assertResult(connection, plugin, 'skip', 'host_mismatch(1st)')
   })
 
   it('passes when current helo matches previous', async () => {
     await callHook(plugin, 'init', connection, 'a.example.com')
-    const r = await callHook(
-      plugin,
-      'host_mismatch',
-      connection,
-      'a.example.com',
-    )
+    const r = await callHook(plugin, 'host_mismatch', connection, 'a.example.com')
     assertCont(r)
     assertResult(connection, plugin, 'pass', 'host_mismatch')
   })

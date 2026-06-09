@@ -27,7 +27,6 @@ const checks = [
 
 exports.register = function () {
   this.load_helo_checks_ini()
-  this.load_helo_allow()
 
   if (this.cfg.check.proto_mismatch) {
     // NOTE: these *must* run before init
@@ -53,22 +52,17 @@ exports.register = function () {
   this.register_hook('helo', 'emit_log')
   this.register_hook('ehlo', 'emit_log')
 
-  if (this.cfg.check.match_re) {
-    const load_re_file = () => {
-      const regex_list = utils.valid_regexes(
-        this.config.get('helo.checks.regexps', 'list', load_re_file),
-      )
-      // pre-compile the regexes
-      this.cfg.list_re = new RegExp(`^(${regex_list.join('|')})$`, 'i')
-    }
-    load_re_file()
-  }
+  if (this.cfg.check.match_re) this.load_re_file()
 }
 
-exports.load_helo_allow = function () {
-  this.allowed = this.config.get('helo.checks.allow', 'list', () => {
-    this.load_helo_allow()
-  })
+exports.load_re_file = function () {
+  const regex_list = utils.valid_regexes(
+    this.config.get('helo.checks.regexps', 'list', () => {
+      this.load_re_file()
+    }),
+  )
+  // pre-compile the regexes
+  this.cfg.list_re = new RegExp(`^(${regex_list.join('|')})$`, 'i')
 }
 
 exports.load_helo_checks_ini = function () {
@@ -94,16 +88,12 @@ exports.load_helo_checks_ini = function () {
   const chk = this.cfg.check
   chk.literal_mismatch = chk.literal_mismatch ?? 2
 
+  this.cfg.skip.tlds = (this.cfg.skip.tlds ?? []).map((tld) => tld.toLowerCase())
+
   // backwards compatible with old config file
-  if (this.cfg.check_no_dot !== undefined) {
-    chk.valid_hostname = !!this.cfg.check_no_dot
-  }
-  if (this.cfg.check_dynamic !== undefined) {
-    chk.dynamic = !!this.cfg.check_dynamic
-  }
-  if (this.cfg.check_raw_ip !== undefined) {
-    chk.bare_ip = !!this.cfg.check_raw_ip
-  }
+  if (this.cfg.check_no_dot !== undefined) chk.valid_hostname = !!this.cfg.check_no_dot
+  if (this.cfg.check_dynamic !== undefined) chk.dynamic = !!this.cfg.check_dynamic
+  if (this.cfg.check_raw_ip !== undefined) chk.bare_ip = !!this.cfg.check_raw_ip
 
   if (chk.mismatch !== undefined && chk.host_mismatch === undefined) {
     this.logerror('deprecated setting mismatch renamed to host_mismatch')
@@ -172,6 +162,14 @@ exports.host_mismatch = function (next, connection, helo) {
 exports.valid_hostname = function (next, connection, helo) {
   if (this.should_skip(connection, 'valid_hostname')) return next()
 
+  if (!helo) {
+    connection.results.add(this, { fail: 'valid_hostname(empty)' })
+    if (this.cfg.reject.valid_hostname) {
+      return next(DENY, 'HELO host name invalid')
+    }
+    return next()
+  }
+
   if (net_utils.is_ip_literal(helo)) {
     connection.results.add(this, { skip: 'valid_hostname(literal)' })
     return next()
@@ -182,10 +180,7 @@ exports.valid_hostname = function (next, connection, helo) {
   if (!/\./.test(helo)) {
     connection.results.add(this, { fail: 'valid_hostname(no_dot)' })
     if (this.cfg.reject.valid_hostname) {
-      return next(
-        DENY,
-        'HELO host must be a FQDN or address literal (RFC 5321 2.3.5)',
-      )
+      return next(DENY, 'HELO host must be a FQDN or address literal (RFC 5321 2.3.5)')
     }
     failed = true
   }
@@ -201,11 +196,9 @@ exports.valid_hostname = function (next, connection, helo) {
 
   // this will fail if TLD is invalid or hostname is a public suffix
   if (!tlds.get_organizational_domain(helo)) {
-    // Check for excluded TLDs
     const tld = helo.split(/\./).reverse()[0].toLowerCase()
-    // Exclude .local, .lan and .corp
-    const excludes = ['local', 'lan', 'corp']
-    if (excludes.includes(tld) || this.allowed.includes(`.${tld}`)) {
+    if (this.cfg.skip.tlds.includes(tld) || this.cfg.skip.tlds.includes(`.${tld}`)) {
+      if (!failed) connection.results.add(this, { skip: `valid_hostname(${tld})` })
       return next()
     }
     connection.results.add(this, { fail: 'valid_hostname' })
@@ -253,10 +246,9 @@ exports.rdns_match = function (next, connection, helo) {
     return next()
   }
 
-  if (
-    tlds.get_organizational_domain(r_host) ===
-    tlds.get_organizational_domain(helo)
-  ) {
+  const rdns_od = tlds.get_organizational_domain(r_host)
+  const helo_od = tlds.get_organizational_domain(helo)
+  if (rdns_od && helo_od && rdns_od === helo_od) {
     connection.results.add(this, { pass: 'rdns_match(org_dom)' })
     return next()
   }
@@ -340,7 +332,7 @@ exports.big_company = function (next, connection, helo) {
 
   const allowed_rdns = this.cfg.bigco[helo].split(/,/)
   for (const allow of allowed_rdns) {
-    const re = new RegExp(`${allow.replaceAll('.', '\\.')}$`)
+    const re = new RegExp(`(?:^|\\.)${allow.replaceAll('.', '\\.')}$`)
     if (re.test(rdns)) {
       connection.results.add(this, { pass: 'big_co' })
       return next()
@@ -357,9 +349,7 @@ exports.big_company = function (next, connection, helo) {
 exports.literal_mismatch = function (next, connection, helo) {
   if (this.should_skip(connection, 'literal_mismatch')) return next()
 
-  const literal = net_utils
-    .get_ipany_re('^\\[(?:IPv6:)?', '\\]$', '')
-    .exec(helo)
+  const literal = net_utils.get_ipany_re('^\\[(?:IPv6:)?', '\\]$', '').exec(helo)
   if (!literal) {
     connection.results.add(this, { pass: 'literal_mismatch' })
     return next()
@@ -380,10 +370,7 @@ exports.literal_mismatch = function (next, connection, helo) {
 
     connection.results.add(this, { fail: 'literal_mismatch' })
     if (this.cfg.reject.literal_mismatch === true) {
-      return next(
-        DENY,
-        'HELO IP literal not in the same /24 as your IP address',
-      )
+      return next(DENY, 'HELO IP literal not in the same /24 as your IP address')
     }
     return next()
   }
@@ -480,10 +467,7 @@ exports.proto_mismatch = function (next, connection, helo, proto) {
   ) {
     connection.results.add(this, { fail: `proto_mismatch(${proto})` })
     if (this.cfg.reject.proto_mismatch) {
-      return next(
-        DENY,
-        `${proto === 'smtp' ? 'HELO' : 'EHLO'} protocol mismatch`,
-      )
+      return next(DENY, `${proto === 'smtp' ? 'HELO' : 'EHLO'} protocol mismatch`)
     }
   }
 

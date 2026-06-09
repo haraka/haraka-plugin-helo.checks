@@ -47,6 +47,7 @@
     "haraka-utils": "^2.2.1"
   },
   "prettier": {
+    "printWidth": 90,
     "singleQuote": true,
     "semi": false
   }

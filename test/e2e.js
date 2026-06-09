@@ -54,12 +54,7 @@ describe('e2e: helo hook chain', () => {
     // first HELO: pass
     await runHookChain(plugin, 'helo', connection, 'mail.example.com')
     // second HELO with a different name: should DENY at host_mismatch
-    const r = await runHookChain(
-      plugin,
-      'helo',
-      connection,
-      'other.example.com',
-    )
+    const r = await runHookChain(plugin, 'helo', connection, 'other.example.com')
     assertDeny(r, /host_mismatch/, DENY)
   })
 

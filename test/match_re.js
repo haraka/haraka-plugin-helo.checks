@@ -1,11 +1,6 @@
 const { beforeEach, describe, it } = require('node:test')
 
-const {
-  callHook,
-  assertCont,
-  assertDeny,
-  assertResult,
-} = require('haraka-test-fixtures')
+const { callHook, assertCont, assertDeny, assertResult } = require('haraka-test-fixtures')
 
 const { setup } = require('./_setup')
 
@@ -18,12 +13,7 @@ describe('match_re', () => {
 
   it('passes when helo does not match the list_re', async () => {
     plugin.cfg.list_re = /^(bad\.tld)$/i
-    const r = await callHook(
-      plugin,
-      'match_re',
-      connection,
-      'not_in_re_list.net',
-    )
+    const r = await callHook(plugin, 'match_re', connection, 'not_in_re_list.net')
     assertCont(r)
     assertResult(connection, plugin, 'pass', 'match_re')
   })

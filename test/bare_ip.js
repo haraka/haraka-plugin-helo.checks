@@ -1,11 +1,6 @@
 const { beforeEach, describe, it } = require('node:test')
 
-const {
-  callHook,
-  assertCont,
-  assertDeny,
-  assertResult,
-} = require('haraka-test-fixtures')
+const { callHook, assertCont, assertDeny, assertResult } = require('haraka-test-fixtures')
 
 const { setup } = require('./_setup')
 

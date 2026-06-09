@@ -1,11 +1,6 @@
 const { beforeEach, describe, it } = require('node:test')
 
-const {
-  callHook,
-  assertCont,
-  assertDeny,
-  assertResult,
-} = require('haraka-test-fixtures')
+const { callHook, assertCont, assertDeny, assertResult } = require('haraka-test-fixtures')
 
 const { setup } = require('./_setup')
 
@@ -18,13 +13,7 @@ describe('proto_mismatch', () => {
   })
 
   it('returns next() when no prior helo_host is recorded', async () => {
-    const r = await callHook(
-      plugin,
-      'proto_mismatch',
-      connection,
-      'host',
-      'smtp',
-    )
+    const r = await callHook(plugin, 'proto_mismatch', connection, 'host', 'smtp')
     assertCont(r)
   })
 
@@ -32,13 +21,7 @@ describe('proto_mismatch', () => {
     await callHook(plugin, 'init', connection, 'helo.example.com')
     connection.esmtp = false
     plugin.cfg.reject.proto_mismatch = false
-    const r = await callHook(
-      plugin,
-      'proto_mismatch',
-      connection,
-      'anything',
-      'esmtp',
-    )
+    const r = await callHook(plugin, 'proto_mismatch', connection, 'anything', 'esmtp')
     assertCont(r)
     assertResult(connection, plugin, 'fail', 'proto_mismatch(esmtp)')
   })
@@ -46,13 +29,7 @@ describe('proto_mismatch', () => {
   it('passes when esmtp=true and proto=esmtp', async () => {
     await callHook(plugin, 'init', connection, 'helo.example.com')
     connection.esmtp = true
-    const r = await callHook(
-      plugin,
-      'proto_mismatch',
-      connection,
-      'anything',
-      'esmtp',
-    )
+    const r = await callHook(plugin, 'proto_mismatch', connection, 'anything', 'esmtp')
     assertCont(r)
   })
 
@@ -60,13 +37,7 @@ describe('proto_mismatch', () => {
     await callHook(plugin, 'init', connection, 'helo.example.com')
     connection.esmtp = false
     plugin.cfg.reject.proto_mismatch = true
-    const r = await callHook(
-      plugin,
-      'proto_mismatch',
-      connection,
-      'anything',
-      'esmtp',
-    )
+    const r = await callHook(plugin, 'proto_mismatch', connection, 'anything', 'esmtp')
     assertDeny(r, /EHLO protocol mismatch/, DENY)
   })
 
@@ -74,13 +45,7 @@ describe('proto_mismatch', () => {
     await callHook(plugin, 'init', connection, 'helo.example.com')
     connection.esmtp = true
     plugin.cfg.reject.proto_mismatch = true
-    const r = await callHook(
-      plugin,
-      'proto_mismatch',
-      connection,
-      'anything',
-      'smtp',
-    )
+    const r = await callHook(plugin, 'proto_mismatch', connection, 'anything', 'smtp')
     assertDeny(r, /HELO protocol mismatch/, DENY)
   })
 

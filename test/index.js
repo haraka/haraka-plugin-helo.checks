@@ -3,12 +3,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { afterEach, beforeEach, describe, it } = require('node:test')
 
-const {
-  callHook,
-  assertCont,
-  getResult,
-  makePlugin,
-} = require('haraka-test-fixtures')
+const { callHook, assertCont, getResult, makePlugin } = require('haraka-test-fixtures')
 const tlds = require('haraka-tld')
 
 const { setup } = require('./_setup')
@@ -31,8 +26,7 @@ function makeConfigDir(prefix) {
   return dir
 }
 
-const pluginAt = (configDir) =>
-  makePlugin('helo.checks', { configDir, register: false })
+const pluginAt = (configDir) => makePlugin('helo.checks', { configDir, register: false })
 
 describe('register', () => {
   let plugin
@@ -82,60 +76,51 @@ describe('register', () => {
   })
 })
 
-describe('load_helo_allow', () => {
+describe('skip_tlds', () => {
   let dir
 
   beforeEach(() => {
-    dir = makeConfigDir('helo-allow-')
+    dir = makeConfigDir('helo-skip-tlds-')
   })
 
   afterEach(() => {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  const writeAllow = (lines) =>
-    fs.writeFileSync(
-      path.join(dir, 'config', 'helo.checks.allow'),
-      `${lines.join('\n')}\n`,
-    )
+  const writeIni = (lines) =>
+    fs.writeFileSync(path.join(dir, 'config', 'helo.checks.ini'), `${lines.join('\n')}\n`)
 
-  it('loads the allow list from disk on register', () => {
-    writeAllow(['.example', '.test'])
+  it('defaults to empty (opt-in) when unconfigured', () => {
     const p = pluginAt(dir)
     p.register()
     try {
-      assert.deepEqual(p.allowed, ['.example', '.test'])
+      assert.deepEqual(p.cfg.skip.tlds, [])
     } finally {
-      p.config.stop_watching('helo.checks.allow')
+      p.config.stop_watching('helo.checks.ini')
     }
   })
 
-  it(
-    'refreshes the allow list when the file changes on disk',
-    { timeout: 20000 },
-    async () => {
-      writeAllow(['.first'])
-      const p = pluginAt(dir)
-      p.load_helo_allow()
-      assert.deepEqual(p.allowed, ['.first'])
+  it('loads [skip] tlds from the ini', () => {
+    writeIni(['[skip]', 'tlds[] = internal', 'tlds[] = test'])
+    const p = pluginAt(dir)
+    p.register()
+    try {
+      assert.deepEqual(p.cfg.skip.tlds, ['internal', 'test'])
+    } finally {
+      p.config.stop_watching('helo.checks.ini')
+    }
+  })
 
-      try {
-        // let the freshly-attached fs.watch arm before mutating (macOS
-        // FSEvents drops changes that land in the same tick as watch())
-        await new Promise((resolve) => setTimeout(resolve, 300))
-        writeAllow(['.second'])
-        // haraka-config debounces reloads with a ~5s sedation timer
-        const refreshed = await waitFor(() => p.allowed.includes('.second'))
-        assert.ok(
-          refreshed,
-          `allow list did not refresh; got ${JSON.stringify(p.allowed)}`,
-        )
-        assert.deepEqual(p.allowed, ['.second'])
-      } finally {
-        p.config.stop_watching('helo.checks.allow')
-      }
-    },
-  )
+  it('lowercases configured TLDs', () => {
+    writeIni(['[skip]', 'tlds[] = LOCAL', 'tlds[] = Corp'])
+    const p = pluginAt(dir)
+    p.register()
+    try {
+      assert.deepEqual(p.cfg.skip.tlds, ['local', 'corp'])
+    } finally {
+      p.config.stop_watching('helo.checks.ini')
+    }
+  })
 })
 
 describe('load_helo_checks_ini', () => {
@@ -166,29 +151,22 @@ describe('load_helo_checks_ini', () => {
     }
   })
 
-  it(
-    'reloads cfg when the ini changes on disk',
-    { timeout: 20000 },
-    async () => {
-      writeIni(false)
-      const p = pluginAt(dir)
-      p.load_helo_checks_ini()
-      assert.equal(p.cfg.check.dynamic, false)
+  it('reloads cfg when the ini changes on disk', { timeout: 20000 }, async () => {
+    writeIni(false)
+    const p = pluginAt(dir)
+    p.load_helo_checks_ini()
+    assert.equal(p.cfg.check.dynamic, false)
 
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 300))
-        writeIni(true)
-        // haraka-config debounces reloads with a ~5s sedation timer
-        const reloaded = await waitFor(() => p.cfg.check.dynamic === true)
-        assert.ok(
-          reloaded,
-          `cfg did not reload; dynamic=${p.cfg.check.dynamic}`,
-        )
-      } finally {
-        p.config.stop_watching('helo.checks.ini')
-      }
-    },
-  )
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      writeIni(true)
+      // haraka-config debounces reloads with a ~5s sedation timer
+      const reloaded = await waitFor(() => p.cfg.check.dynamic === true)
+      assert.ok(reloaded, `cfg did not reload; dynamic=${p.cfg.check.dynamic}`)
+    } finally {
+      p.config.stop_watching('helo.checks.ini')
+    }
+  })
 })
 
 describe('default config', () => {
@@ -201,7 +179,12 @@ describe('default config', () => {
   it('is loaded after register', () => {
     assert.deepEqual(plugin.cfg, {
       main: {},
-      skip: { private_ip: true, whitelist: true, relaying: true },
+      skip: {
+        private_ip: true,
+        whitelist: true,
+        relaying: true,
+        tlds: [],
+      },
       reject: {
         proto_mismatch: false,
         match_re: false,
