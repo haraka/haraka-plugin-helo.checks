@@ -1,11 +1,6 @@
 const { beforeEach, describe, it } = require('node:test')
 
-const {
-  callHook,
-  assertCont,
-  assertDeny,
-  assertResult,
-} = require('haraka-test-fixtures')
+const { callHook, assertCont, assertDeny, assertResult } = require('haraka-test-fixtures')
 
 const { setup } = require('./_setup')
 
@@ -23,6 +18,14 @@ describe('big_company', () => {
     const r = await callHook(plugin, 'big_company', connection, 'yahoo.co.jp')
     assertCont(r)
     assertResult(connection, plugin, 'pass', 'big_co')
+  })
+
+  it('fails when rDNS ends with the suffix but is a different domain (e.g. notyahoo.com)', async () => {
+    connection.remote.host = 'notyahoo.com'
+    plugin.cfg.reject.big_company = false
+    const r = await callHook(plugin, 'big_company', connection, 'yahoo.com')
+    assertCont(r)
+    assertResult(connection, plugin, 'fail', 'big_co')
   })
 
   it('fails (no reject) when bigco helo and rDNS do not match', async () => {
@@ -55,12 +58,7 @@ describe('big_company', () => {
   })
 
   it('passes (not bigco) when helo is not in cfg.bigco', async () => {
-    const r = await callHook(
-      plugin,
-      'big_company',
-      connection,
-      'unknown.example',
-    )
+    const r = await callHook(plugin, 'big_company', connection, 'unknown.example')
     assertCont(r)
     assertResult(connection, plugin, 'pass', 'big_co(not)')
   })

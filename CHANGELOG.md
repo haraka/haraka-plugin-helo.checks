@@ -4,6 +4,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Unreleased
 
+### [1.1.3] - 2026-06-07
+
+- fix(valid_hostname): moved tld exemption list from code to .ini file
+- fix(conf): replace undocumented helo.checks.allow file with cfg.tld.skip
+- fix(rdns_match): require both org domains to be truthy
+- fix(big_company): anchor the suffix, prevent spoof bypass
+- fix(valid_hostname): guard against empty
+- fix(valid_hostname): don't short circuit tests with early exit
+- refactor forward_dns as async/await
+
 ### [1.1.2] - 2026-05-29
 
 - fix: actually migrate deprecated `mismatch` setting to `host_mismatch`
@@ -55,3 +65,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 [1.1.0]: https://github.com/haraka/haraka-plugin-helo.checks/releases/tag/v1.1.0
 [1.1.1]: https://github.com/haraka/haraka-plugin-helo.checks/releases/tag/v1.1.1
 [1.1.2]: https://github.com/haraka/haraka-plugin-helo.checks/releases/tag/v1.1.2
+[1.1.3]: https://github.com/haraka/haraka-plugin-helo.checks/releases/tag/v1.1.3

@@ -28,9 +28,7 @@ if (connection.results.has('helo.checks', 'pass', /^forward_dns/)) {
 
 - helo.checks.regexps
 
-  List of regular expressions to match against the HELO string. The regular
-  expressions are automatically wrapped in `^` and `$` so they always match
-  the entire string.
+  List of regular expressions to match against the HELO string. The regular expressions are automatically wrapped in `^` and `$` so they always match the entire string.
 
 - helo.checks.ini
 
@@ -47,60 +45,24 @@ How many seconds to wait for DNS queries to timeout.
 
 ### [check]
 
-- valid_hostname=true
+Each check is enabled by default; set it to `false` to disable.
 
-  Checks that the HELO has at least one '.' in it and the organizational
-  name is possible (ie, a host within a Public Suffix).
-
-- bare_ip=true
-
-  Checks for HELO <IP> where the IP is not surrounded by square brackets.
-  This is an RFC violation so should always be enabled.
-
-- dynamic=true
-
-  Checks to see if all or part the connecting IP address appears within
-  the HELO argument to indicate that the client has a dynamic IP address.
-
-- literal_mismatch=1|2|3
-
-  Checks to see if the IP literal used matches the connecting IP address.
-  If set to 1, the full IP must match. If set to 2, the /24 must match.
-  If set to 3, the /24 may match, or the IP can be private (RFC 1918).
-
-- match_re=true
-
-  See above. This is merely an on/off toggle.
-
-- big_company=true
-
-  See below. This is merely an on/off toggle.
-
-- forward_dns=true
-
-  Perform a DNS lookup of the HELO hostname and validate that the IP of
-  the remote is included in the IP(s) of the HELO hostname.
-
-  This test requires that the valid_hostname check is also enabled.
-
-- rdns_match=true
-
-  Sees if the HELO hostname (or at least the domain) match the rDNS
-  hostname(s).
-
-- host_mismatch=true
-
-  If HELO is called multiple times, checks if the hostname differs between
-  EHLO invocations.
-
-- proto_mismatch=true
-
-  If EHLO was sent and the host later tries to then send HELO or vice-versa.
+| Setting          | Values  | Description                                                                                                                                                                    |
+| ---------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| valid_hostname   | true    | Checks that the HELO has at least one `.` in it and the organizational name is possible (ie, a host within a Public Suffix).                                                   |
+| bare_ip          | true    | Checks for HELO `<IP>` where the IP is not surrounded by square brackets. This is an RFC violation so should always be enabled.                                                |
+| dynamic          | true    | Checks whether all or part of the connecting IP address appears within the HELO argument, indicating that the client has a dynamic IP address.                                 |
+| literal_mismatch | 1\|2\|3 | Checks whether the IP literal matches the connecting IP. `1` = the full IP must match; `2` = the /24 must match; `3` = the /24 may match, or the IP can be private (RFC 1918). |
+| match_re         | true    | On/off toggle for the `helo.checks.regexps` matches (see above).                                                                                                               |
+| big_company      | true    | On/off toggle for the `[bigco]` matches (see below).                                                                                                                           |
+| forward_dns      | true    | Look up the HELO hostname in DNS and validate that the remote IP is among the hostname's IP(s). Requires `valid_hostname` to be enabled.                                       |
+| rdns_match       | true    | Checks whether the HELO hostname (or at least the domain) matches the rDNS hostname(s).                                                                                        |
+| host_mismatch    | true    | If HELO is sent multiple times, checks whether the hostname differs between invocations.                                                                                       |
+| proto_mismatch   | true    | Flags a host that sent EHLO and then tries to send HELO, or vice-versa.                                                                                                        |
 
 ### [reject]
 
-For all of the checks included above, a matching key in the reject section
-controls whether messages that fail the test are rejected.
+For all of the checks included above, a matching key in the reject section controls whether messages that fail the test are rejected.
 
 Defaults shown:
 
@@ -121,12 +83,22 @@ big_company=false
 
 - private_ip=true
 
-  Bypasses checks for clients within RFC1918, Loopback or APIPA IP address ranges.
+Bypasses checks for clients within RFC1918, Loopback or APIPA IP address ranges.
 
 - relaying
 
-  Bypass checks for clients who have relaying privileges (whitelisted IP,
-  SMTP-AUTH, etc).
+Bypass checks for clients who have relaying privileges (whitelisted IP, SMTP-AUTH, etc).
+
+- tlds[]
+
+TLDs whose hostnames are exempt from `valid_hostname` (they have no public organizational domain, so they can be neither validated nor resolved). Empty by default; enable it deliberately by listing one TLD per line:
+
+```ini
+[skip]
+; tlds[] = local
+; tlds[] = lan
+; tlds[] = corp
+```
 
 ### [bigco]
 

@@ -1,11 +1,6 @@
 const { beforeEach, describe, it } = require('node:test')
 
-const {
-  callHook,
-  assertCont,
-  assertDeny,
-  assertResult,
-} = require('haraka-test-fixtures')
+const { callHook, assertCont, assertDeny, assertResult } = require('haraka-test-fixtures')
 
 const { setup } = require('./_setup')
 
@@ -18,12 +13,16 @@ describe('valid_hostname', () => {
   })
 
   it('passes for a valid FQDN', async () => {
-    const r = await callHook(
-      plugin,
-      'valid_hostname',
-      connection,
-      'great.domain.com',
-    )
+    const r = await callHook(plugin, 'valid_hostname', connection, 'great.domain.com')
+    assertCont(r)
+    assertResult(connection, plugin, 'pass', 'valid_hostname')
+  })
+
+  it('passes for a valid FQDN even when an earlier check failed', async () => {
+    // a prior check (e.g. match_re) may have recorded a fail; that must not
+    // suppress this check's own pass, which forward_dns keys off of
+    connection.results.add(plugin, { fail: 'match_re' })
+    const r = await callHook(plugin, 'valid_hostname', connection, 'great.domain.com')
     assertCont(r)
     assertResult(connection, plugin, 'pass', 'valid_hostname')
   })
@@ -52,12 +51,7 @@ describe('valid_hostname', () => {
   })
 
   it('skips when helo is an IP literal', async () => {
-    const r = await callHook(
-      plugin,
-      'valid_hostname',
-      connection,
-      '[192.0.2.1]',
-    )
+    const r = await callHook(plugin, 'valid_hostname', connection, '[192.0.2.1]')
     assertCont(r)
     assertResult(connection, plugin, 'skip', 'valid_hostname(literal)')
   })
@@ -75,47 +69,50 @@ describe('valid_hostname', () => {
     assertDeny(r, /FQDN or address literal/, DENY)
   })
 
-  it('allows .local TLD without requiring valid org domain', async () => {
-    const r = await callHook(
-      plugin,
-      'valid_hostname',
-      connection,
-      'workstation.local',
-    )
+  it('fails an exempt-looking TLD when skip.tlds is empty (default)', async () => {
+    plugin.cfg.reject.valid_hostname = false
+    const r = await callHook(plugin, 'valid_hostname', connection, 'workstation.local')
     assertCont(r)
+    assertResult(connection, plugin, 'fail', 'valid_hostname')
   })
 
-  it('allows .lan TLD', async () => {
+  it('skips a TLD listed in skip.tlds', async () => {
+    plugin.cfg.skip.tlds = ['local', 'lan', 'corp']
     const r = await callHook(plugin, 'valid_hostname', connection, 'host.lan')
     assertCont(r)
+    assertResult(connection, plugin, 'skip', 'valid_hostname')
   })
 
-  it('allows .corp TLD', async () => {
-    const r = await callHook(plugin, 'valid_hostname', connection, 'host.corp')
+  it('skips a custom TLD listed in skip.tlds', async () => {
+    plugin.cfg.skip.tlds = ['internal']
+    const r = await callHook(plugin, 'valid_hostname', connection, 'box.internal')
     assertCont(r)
+    assertResult(connection, plugin, 'skip', 'valid_hostname')
   })
 
   it('fails (no reject) when helo contains non-ASCII characters', async () => {
     plugin.cfg.reject.valid_hostname = false
-    const r = await callHook(
-      plugin,
-      'valid_hostname',
-      connection,
-      'café.example',
-    )
+    const r = await callHook(plugin, 'valid_hostname', connection, 'café.example')
     assertCont(r)
     assertResult(connection, plugin, 'fail', 'valid_hostname(not_ascii)')
   })
 
   it('DENYs non-ASCII helo when reject=true (RFC 5321 §2.3.5)', async () => {
     plugin.cfg.reject.valid_hostname = true
-    const r = await callHook(
-      plugin,
-      'valid_hostname',
-      connection,
-      'üöä.example',
-    )
+    const r = await callHook(plugin, 'valid_hostname', connection, 'üöä.example')
     assertDeny(r, undefined, DENY)
+    assertResult(connection, plugin, 'fail', 'valid_hostname(not_ascii)')
+  })
+
+  it('Detects non-ASCII helo (RFC 5321 §2.3.5)', async () => {
+    plugin.cfg.reject.valid_hostname = false
+    await callHook(plugin, 'valid_hostname', connection, 'exaöple')
+    assertResult(connection, plugin, 'fail', 'valid_hostname(not_ascii)')
+  })
+
+  it('Detects non-ASCII helo with dot (RFC 5321 §2.3.5)', async () => {
+    plugin.cfg.reject.valid_hostname = false
+    await callHook(plugin, 'valid_hostname', connection, 'host.exaöple')
     assertResult(connection, plugin, 'fail', 'valid_hostname(not_ascii)')
   })
 })

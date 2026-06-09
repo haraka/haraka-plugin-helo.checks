@@ -43,30 +43,42 @@ describe('get_a_records', () => {
     assert.ok(ips.some((ip) => ip.includes(':')))
   })
 
-  it('returns [] when the resolver only sees NOTFOUND-like codes', async () => {
-    const ips = await plugin.get_a_records('nx.example')
+  it('returns [] for a host that only yields tolerated DNS failures', async () => {
+    // broken.example -> SERVFAIL, a tolerated "no forward DNS" code
+    const ips = await plugin.get_a_records('broken.example')
     assert.deepEqual(ips, [])
   })
 
-  it('does not throw TypeError when get_ips_by_host rejects with unknown codes', async () => {
+  it('rethrows a fatal lookup error (with its code) when no addrs found', async () => {
     const net_utils = require('haraka-net-utils')
-    const original = net_utils.get_ips_by_host
-    net_utils.get_ips_by_host = async () => {
-      throw [Object.assign(new Error('quirky'), { code: 'EFOO' })]
-    }
+    const original = net_utils.getHostIPs
+    net_utils.getHostIPs = async () => ({
+      addrs: [],
+      errors: [Object.assign(new Error('quirky'), { code: 'EFOO' })],
+    })
     try {
-      await assert.rejects(
-        () => plugin.get_a_records('mail.example.com'),
-        (err) => !(err instanceof TypeError),
-      )
+      await assert.rejects(() => plugin.get_a_records('mail.example.com'), {
+        code: 'EFOO',
+      })
     } finally {
-      net_utils.get_ips_by_host = original
+      net_utils.getHostIPs = original
     }
   })
 
   it('appends a trailing dot to bypass /etc/resolv.conf search', async () => {
-    // mail.example.com (no trailing dot) should still resolve via our fake DNS
-    const ips = await plugin.get_a_records('mail.example.com')
-    assert.ok(ips.length)
+    const net_utils = require('haraka-net-utils')
+    const original = net_utils.getHostIPs
+    const seen = []
+    net_utils.getHostIPs = async (host) => {
+      seen.push(host)
+      return { addrs: ['198.51.100.10'], errors: [] }
+    }
+    try {
+      await plugin.get_a_records('mail.example.com') // undotted -> dot added
+      await plugin.get_a_records('already.example.') // dotted -> left as-is
+    } finally {
+      net_utils.getHostIPs = original
+    }
+    assert.deepEqual(seen, ['mail.example.com.', 'already.example.'])
   })
 })

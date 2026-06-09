@@ -1,16 +1,32 @@
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
 const path = require('node:path')
-const { beforeEach, describe, it } = require('node:test')
+const { afterEach, beforeEach, describe, it } = require('node:test')
 
-const {
-  callHook,
-  assertCont,
-  getResult,
-  makePlugin,
-} = require('haraka-test-fixtures')
+const { callHook, assertCont, getResult, makePlugin } = require('haraka-test-fixtures')
 const tlds = require('haraka-tld')
 
 const { setup } = require('./_setup')
+
+async function waitFor(predicate, { timeout = 12000, interval = 50 } = {}) {
+  const start = Date.now()
+  while (Date.now() - start < timeout) {
+    if (predicate()) return true
+    await new Promise((resolve) => setTimeout(resolve, interval))
+  }
+  return predicate()
+}
+
+const FIXTURES = path.join(__dirname, 'fixtures')
+
+function makeConfigDir(prefix) {
+  fs.mkdirSync(FIXTURES, { recursive: true })
+  const dir = fs.mkdtempSync(path.join(FIXTURES, prefix))
+  fs.mkdirSync(path.join(dir, 'config'))
+  return dir
+}
+
+const pluginAt = (configDir) => makePlugin('helo.checks', { configDir, register: false })
 
 describe('register', () => {
   let plugin
@@ -60,6 +76,99 @@ describe('register', () => {
   })
 })
 
+describe('skip_tlds', () => {
+  let dir
+
+  beforeEach(() => {
+    dir = makeConfigDir('helo-skip-tlds-')
+  })
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  const writeIni = (lines) =>
+    fs.writeFileSync(path.join(dir, 'config', 'helo.checks.ini'), `${lines.join('\n')}\n`)
+
+  it('defaults to empty (opt-in) when unconfigured', () => {
+    const p = pluginAt(dir)
+    p.register()
+    try {
+      assert.deepEqual(p.cfg.skip.tlds, [])
+    } finally {
+      p.config.stop_watching('helo.checks.ini')
+    }
+  })
+
+  it('loads [skip] tlds from the ini', () => {
+    writeIni(['[skip]', 'tlds[] = internal', 'tlds[] = test'])
+    const p = pluginAt(dir)
+    p.register()
+    try {
+      assert.deepEqual(p.cfg.skip.tlds, ['internal', 'test'])
+    } finally {
+      p.config.stop_watching('helo.checks.ini')
+    }
+  })
+
+  it('lowercases configured TLDs', () => {
+    writeIni(['[skip]', 'tlds[] = LOCAL', 'tlds[] = Corp'])
+    const p = pluginAt(dir)
+    p.register()
+    try {
+      assert.deepEqual(p.cfg.skip.tlds, ['local', 'corp'])
+    } finally {
+      p.config.stop_watching('helo.checks.ini')
+    }
+  })
+})
+
+describe('load_helo_checks_ini', () => {
+  let dir
+
+  beforeEach(() => {
+    dir = makeConfigDir('helo-ini-')
+  })
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  const writeIni = (dynamic) =>
+    fs.writeFileSync(
+      path.join(dir, 'config', 'helo.checks.ini'),
+      `[check]\ndynamic=${dynamic}\n`,
+    )
+
+  it('loads cfg from disk', () => {
+    writeIni(false)
+    const p = pluginAt(dir)
+    p.load_helo_checks_ini()
+    try {
+      assert.equal(p.cfg.check.dynamic, false)
+    } finally {
+      p.config.stop_watching('helo.checks.ini')
+    }
+  })
+
+  it('reloads cfg when the ini changes on disk', { timeout: 20000 }, async () => {
+    writeIni(false)
+    const p = pluginAt(dir)
+    p.load_helo_checks_ini()
+    assert.equal(p.cfg.check.dynamic, false)
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      writeIni(true)
+      // haraka-config debounces reloads with a ~5s sedation timer
+      const reloaded = await waitFor(() => p.cfg.check.dynamic === true)
+      assert.ok(reloaded, `cfg did not reload; dynamic=${p.cfg.check.dynamic}`)
+    } finally {
+      p.config.stop_watching('helo.checks.ini')
+    }
+  })
+})
+
 describe('default config', () => {
   let plugin
 
@@ -70,7 +179,12 @@ describe('default config', () => {
   it('is loaded after register', () => {
     assert.deepEqual(plugin.cfg, {
       main: {},
-      skip: { private_ip: true, whitelist: true, relaying: true },
+      skip: {
+        private_ip: true,
+        whitelist: true,
+        relaying: true,
+        tlds: [],
+      },
       reject: {
         proto_mismatch: false,
         match_re: false,
@@ -200,23 +314,6 @@ describe('deprecated key migration', () => {
       bigco: {},
     })
     assert.equal(plugin.cfg.check.literal_mismatch, 0)
-  })
-
-  it('re-loads cfg when the registered watch callback fires', () => {
-    let captured
-    plugin.config.get = (name, opts, cb) => {
-      captured = cb
-      return { check: { dynamic: false }, reject: {}, skip: {}, bigco: {} }
-    }
-    plugin.load_helo_checks_ini()
-    assert.equal(plugin.cfg.check.dynamic, false)
-
-    plugin.config.get = (name, opts, cb) => {
-      captured = cb
-      return { check: { dynamic: true }, reject: {}, skip: {}, bigco: {} }
-    }
-    captured()
-    assert.equal(plugin.cfg.check.dynamic, true)
   })
 })
 
